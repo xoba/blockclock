@@ -97,7 +97,12 @@ func helloClock() {
 			continue
 		}
 		t := time.Unix(int64(last.Latest.Time), 0)
-		set(fmt.Sprintf("%s @ %d (%.0fm)", dollars(last.Price.Bitcoin["usd"]), last.Latest.Height, time.Since(t).Minutes()))
+		set(fmt.Sprintf(
+			"%s @ %s (%.0fm)",
+			dollars(last.Price.Bitcoin["usd"]),
+			integer(last.Latest.Height),
+			time.Since(t).Minutes(),
+		))
 	}
 }
 
@@ -109,6 +114,11 @@ func dollars(v float64) string {
 	} else {
 		return "$" + s
 	}
+}
+
+func integer(v int) string {
+	p := message.NewPrinter(language.English)
+	return p.Sprintf("%d", v)
 }
 
 func main() {
