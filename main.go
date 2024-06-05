@@ -29,12 +29,14 @@ type Price struct {
 }
 
 type DataSet struct {
-	Error error
+	Error   error
+	Fetched time.Time
 	*Latest
 	*Price
 }
 
 func fetchData() (out DataSet) {
+	out.Fetched = time.Now()
 	h, err := getHeight()
 	if err != nil {
 		out.Error = err
@@ -60,7 +62,7 @@ func bitcoinStatus() {
 	go func() {
 		for {
 			ch <- fetchData()
-			time.Sleep(time.Minute)
+			time.Sleep(50 * time.Second)
 		}
 	}()
 	var last *DataSet
@@ -68,7 +70,7 @@ func bitcoinStatus() {
 		select {
 		case f := <-ch:
 			last = &f
-		case <-time.After(time.Second):
+		case <-time.After(time.Second / 3):
 		}
 		if last == nil {
 			log.Printf("no data\n")
@@ -80,10 +82,11 @@ func bitcoinStatus() {
 		} else {
 			t := time.Unix(int64(last.Latest.Time), 0)
 			setText(fmt.Sprintf(
-				"%s @ %s (%.0fm)",
+				"%s @ %s (%.0fm/%.0fs)",
 				formatDollars(last.Price.Bitcoin["usd"]),
 				formatInteger(last.Latest.Height),
 				time.Since(t).Minutes(),
+				time.Since(last.Fetched).Seconds(),
 			))
 		}
 	}
