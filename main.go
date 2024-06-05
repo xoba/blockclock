@@ -18,45 +18,6 @@ func main() {
 	menuet.App().RunApplication()
 }
 
-type Latest struct {
-	Hash   string
-	Height int
-	Time   int
-}
-
-type Price struct {
-	Bitcoin map[string]float64
-}
-
-type DataSet struct {
-	Error   error
-	Fetched time.Time
-	*Latest
-	*Price
-}
-
-func fetchData() (out DataSet) {
-	out.Fetched = time.Now()
-	h, err := getHeight()
-	if err != nil {
-		out.Error = err
-		return
-	}
-	out.Latest = h
-	p, err := getPrice()
-	if err != nil {
-		out.Error = err
-	}
-	out.Price = p
-	return
-}
-
-func setText(s string) {
-	menuet.App().SetMenuState(&menuet.MenuState{
-		Title: s,
-	})
-}
-
 func bitcoinStatus() {
 	ch := make(chan DataSet)
 	go func() {
@@ -78,10 +39,10 @@ func bitcoinStatus() {
 		}
 		if last.Error != nil {
 			log.Printf("error: %v\n", last.Error)
-			setText(last.Error.Error())
+			setMenuTitle(last.Error.Error())
 		} else {
 			t := time.Unix(int64(last.Latest.Time), 0)
-			setText(fmt.Sprintf(
+			setMenuTitle(fmt.Sprintf(
 				"%s @ %s (%.0fm/%.0fs)",
 				formatDollars(last.Price.Bitcoin["usd"]),
 				formatInteger(last.Latest.Height),
@@ -90,6 +51,45 @@ func bitcoinStatus() {
 			))
 		}
 	}
+}
+
+type DataSet struct {
+	Error   error
+	Fetched time.Time
+	*Latest
+	*Price
+}
+
+type Latest struct {
+	Hash   string
+	Height int
+	Time   int
+}
+
+type Price struct {
+	Bitcoin map[string]float64
+}
+
+func fetchData() (out DataSet) {
+	out.Fetched = time.Now()
+	h, err := getLatest()
+	if err != nil {
+		out.Error = err
+		return
+	}
+	out.Latest = h
+	p, err := getPrice()
+	if err != nil {
+		out.Error = err
+	}
+	out.Price = p
+	return
+}
+
+func setMenuTitle(title string) {
+	menuet.App().SetMenuState(&menuet.MenuState{
+		Title: title,
+	})
 }
 
 func formatDollars(v float64) string {
@@ -107,7 +107,7 @@ func formatInteger(v int) string {
 	return p.Sprintf("%d", v)
 }
 
-func getHeight() (*Latest, error) {
+func getLatest() (*Latest, error) {
 	return getJSONResource[Latest]("https://blockchain.info/latestblock")
 }
 
@@ -130,6 +130,7 @@ func getJSONResource[T any](url string) (*T, error) {
 	if err := d.Decode(&x); err != nil {
 		return nil, err
 	}
+	buf, _ := json.Marshal(x)
+	log.Printf("response: %s\n", string(buf))
 	return &x, nil
-
 }
