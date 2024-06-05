@@ -1,6 +1,6 @@
 module xoba.com/menu
 
-go 1.22.2
+go 1.22.4
 
 require (
 	github.com/caseymrm/menuet v1.0.3
