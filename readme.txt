@@ -1,0 +1,1 @@
+keep up to date on bitcoin in the mac menu bar
