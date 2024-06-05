@@ -1,4 +1,4 @@
-module xoba.com/menu
+module xoba.com/blockclock
 
 go 1.22.4
 
