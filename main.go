@@ -56,7 +56,7 @@ func bitcoinStatus() {
 		for {
 			f, err := fetchData()
 			if err != nil {
-				setText(fmt.Errorf("can't fetch: %v", err).Error())
+				setText(err.Error())
 			} else {
 				ch <- f
 			}
