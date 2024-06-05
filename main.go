@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"time"
 
 	"github.com/caseymrm/menuet"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 type Latest struct {
@@ -94,7 +97,17 @@ func helloClock() {
 			continue
 		}
 		t := time.Unix(int64(last.Latest.Time), 0)
-		set(fmt.Sprintf("$%.0f @ %d (%.0fm)", last.Price.Bitcoin["usd"], last.Latest.Height, time.Since(t).Minutes()))
+		set(fmt.Sprintf("%s @ %d (%.0fm)", dollars(last.Price.Bitcoin["usd"]), last.Latest.Height, time.Since(t).Minutes()))
+	}
+}
+
+func dollars(v float64) string {
+	p := message.NewPrinter(language.English)
+	s := p.Sprintf("%.0f", math.Abs(v))
+	if v < 0 {
+		return "-$" + s
+	} else {
+		return "$" + s
 	}
 }
 
