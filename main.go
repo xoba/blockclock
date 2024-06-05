@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -19,7 +20,25 @@ type Price struct {
 	Bitcoin map[string]float64
 }
 
+type Data struct {
+	Latest
+	Price
+}
+
+func fetch() (*Data, error) {
+	h, err := height()
+	if err != nil {
+		return nil, err
+	}
+	p, err := price()
+	if err != nil {
+		return nil, err
+	}
+	return &Data{*h, *p}, nil
+}
+
 func get[T any](u string) (*T, error) {
+	log.Printf("crawling %s\n", u)
 	resp, err := http.Get(u)
 	if err != nil {
 		return nil, err
@@ -52,22 +71,30 @@ func set(s string) {
 }
 
 func helloClock() {
-	for {
-		if err := func() error {
-			h, err := height()
+	ch := make(chan *Data)
+	go func() {
+		for {
+			f, err := fetch()
 			if err != nil {
-				return err
+				set(fmt.Errorf("can't fetch: %v", err).Error())
+			} else {
+				ch <- f
 			}
-			p, err := price()
-			if err != nil {
-				return err
-			}
-			set(fmt.Sprintf("$%.2f @ %d", p.Bitcoin["usd"], h.Height))
-			return nil
-		}(); err != nil {
-			set(fmt.Sprintf("error: %v", err))
+			time.Sleep(time.Minute)
 		}
-		time.Sleep(time.Minute)
+	}()
+	var last *Data
+	for {
+		select {
+		case f := <-ch:
+			last = f
+		case <-time.After(time.Second):
+		}
+		if last == nil {
+			continue
+		}
+		t := time.Unix(int64(last.Latest.Time), 0)
+		set(fmt.Sprintf("$%.0f @ %d (%.0fm)", last.Price.Bitcoin["usd"], last.Latest.Height, time.Since(t).Minutes()))
 	}
 }
 
