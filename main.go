@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"time"
@@ -17,31 +18,35 @@ func main() {
 	menuet.App().RunApplication()
 }
 
-type LatestBlockchain struct {
+type Latest struct {
 	Hash   string
 	Height int
 	Time   int
 }
 
-type CoinGeckoPrice struct {
+type Price struct {
 	Bitcoin map[string]float64
 }
 
 type DataSet struct {
-	LatestBlockchain
-	CoinGeckoPrice
+	Error error
+	*Latest
+	*Price
 }
 
-func fetchData() (*DataSet, error) {
+func fetchData() (out DataSet) {
 	h, err := getHeight()
 	if err != nil {
-		return nil, err
+		out.Error = err
+		return
 	}
+	out.Latest = h
 	p, err := getPrice()
 	if err != nil {
-		return nil, err
+		out.Error = err
 	}
-	return &DataSet{*h, *p}, nil
+	out.Price = p
+	return
 }
 
 func setText(s string) {
@@ -51,15 +56,10 @@ func setText(s string) {
 }
 
 func bitcoinStatus() {
-	ch := make(chan *DataSet)
+	ch := make(chan DataSet)
 	go func() {
 		for {
-			f, err := fetchData()
-			if err != nil {
-				setText(err.Error())
-			} else {
-				ch <- f
-			}
+			ch <- fetchData()
 			time.Sleep(time.Minute)
 		}
 	}()
@@ -67,19 +67,25 @@ func bitcoinStatus() {
 	for {
 		select {
 		case f := <-ch:
-			last = f
+			last = &f
 		case <-time.After(time.Second):
 		}
 		if last == nil {
+			log.Printf("no data\n")
 			continue
 		}
-		t := time.Unix(int64(last.LatestBlockchain.Time), 0)
-		setText(fmt.Sprintf(
-			"%s @ %s (%.0fm)",
-			formatDollars(last.CoinGeckoPrice.Bitcoin["usd"]),
-			formatInteger(last.LatestBlockchain.Height),
-			time.Since(t).Minutes(),
-		))
+		if last.Error != nil {
+			log.Printf("error: %v\n", last.Error)
+			setText(last.Error.Error())
+		} else {
+			t := time.Unix(int64(last.Latest.Time), 0)
+			setText(fmt.Sprintf(
+				"%s @ %s (%.0fm)",
+				formatDollars(last.Price.Bitcoin["usd"]),
+				formatInteger(last.Latest.Height),
+				time.Since(t).Minutes(),
+			))
+		}
 	}
 }
 
@@ -98,15 +104,16 @@ func formatInteger(v int) string {
 	return p.Sprintf("%d", v)
 }
 
-func getHeight() (*LatestBlockchain, error) {
-	return getJSONResource[LatestBlockchain]("https://blockchain.info/latestblock")
+func getHeight() (*Latest, error) {
+	return getJSONResource[Latest]("https://blockchain.info/latestblock")
 }
 
-func getPrice() (*CoinGeckoPrice, error) {
-	return getJSONResource[CoinGeckoPrice]("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
+func getPrice() (*Price, error) {
+	return getJSONResource[Price]("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
 }
 
 func getJSONResource[T any](url string) (*T, error) {
+	log.Printf("crawling %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
