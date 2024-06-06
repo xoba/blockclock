@@ -24,8 +24,11 @@ func bitcoinStatus() {
 		for {
 			d := fetchData()
 			dt := time.Minute
+			const (
+				max = 15 * time.Minute
+				min = time.Minute
+			)
 			if d.Error == nil && d.Latest != nil {
-				const max = 15 * time.Minute
 				dt = time.Since(d.Latest.Time) / 2
 				switch {
 				case dt < 0:
@@ -35,6 +38,9 @@ func bitcoinStatus() {
 				}
 			}
 			ch <- d
+			if dt < min {
+				dt = min
+			}
 			log.Printf("sleeping for %v\n", dt)
 			time.Sleep(dt)
 		}
