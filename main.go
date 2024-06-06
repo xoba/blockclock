@@ -22,8 +22,21 @@ func bitcoinStatus() {
 	ch := make(chan DataSet)
 	go func() {
 		for {
-			ch <- fetchData()
-			time.Sleep(50 * time.Second)
+			d := fetchData()
+			dt := time.Minute
+			if d.Error == nil && d.Latest != nil {
+				const max = 15 * time.Minute
+				dt = time.Since(d.Latest.Time) / 2
+				switch {
+				case dt < 0:
+					dt = time.Minute
+				case dt > max:
+					dt = max
+				}
+			}
+			ch <- d
+			log.Printf("sleeping for %v\n", dt)
+			time.Sleep(dt)
 		}
 	}()
 	var last *DataSet
@@ -41,7 +54,7 @@ func bitcoinStatus() {
 			log.Printf("error: %v\n", last.Error)
 			setMenuTitle(last.Error.Error())
 		} else {
-			t := time.Unix(int64(last.Latest.Time), 0)
+			t := last.Latest.Time
 			setMenuTitle(fmt.Sprintf(
 				"%s @ %s (%.0fm/%.0fs)",
 				formatDollars(last.Price.Bitcoin["usd"]),
@@ -63,7 +76,7 @@ type DataSet struct {
 type Latest struct {
 	Hash   string
 	Height int
-	Time   int
+	Time   time.Time
 }
 
 type Price struct {
@@ -108,7 +121,7 @@ func formatInteger(v int) string {
 }
 
 func getLatest() (*Latest, error) {
-	return getJSONResource[Latest]("https://blockchain.info/latestblock")
+	return getJSONResource[Latest]("https://api.blockcypher.com/v1/btc/main")
 }
 
 func getPrice() (*Price, error) {
