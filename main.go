@@ -29,8 +29,8 @@ func bitcoinStatus() {
 				max = 15 * time.Minute
 				min = time.Minute
 			)
-			if d.Error == nil && d.Latest != nil {
-				dt = time.Since(d.Latest.Time) / 2
+			if d.Error == nil && d.BlockchainStats != nil {
+				dt = time.Since(d.BlockchainStats.Time) / 2
 				switch {
 				case dt < 0:
 					dt = time.Minute
@@ -57,25 +57,25 @@ func bitcoinStatus() {
 			continue
 		}
 		switch {
-		case last.Price != nil && last.Latest != nil:
+		case last.PriceInfo != nil && last.BlockchainStats != nil:
 			setMenuTitle(fmt.Sprintf(
 				"%s @ %s (%.0fm/%.0fs)",
-				formatDollars(last.Price.Bitcoin["usd"]),
-				formatInteger(last.Latest.Height),
-				time.Since(last.Latest.Time).Minutes(),
+				formatDollars(last.PriceInfo.Bitcoin["usd"]),
+				formatInteger(last.BlockchainStats.Height),
+				time.Since(last.BlockchainStats.Time).Minutes(),
 				time.Since(last.Fetched).Seconds(),
 			))
-		case last.Price != nil:
+		case last.PriceInfo != nil:
 			setMenuTitle(fmt.Sprintf(
 				"%s (%.0fs)",
-				formatDollars(last.Price.Bitcoin["usd"]),
+				formatDollars(last.PriceInfo.Bitcoin["usd"]),
 				time.Since(last.Fetched).Seconds(),
 			))
-		case last.Latest != nil:
+		case last.BlockchainStats != nil:
 			setMenuTitle(fmt.Sprintf(
 				"@ %s (%.0fm/%.0fs)",
-				formatInteger(last.Latest.Height),
-				time.Since(last.Latest.Time).Minutes(),
+				formatInteger(last.BlockchainStats.Height),
+				time.Since(last.BlockchainStats.Time).Minutes(),
 				time.Since(last.Fetched).Seconds(),
 			))
 		}
@@ -89,17 +89,17 @@ func bitcoinStatus() {
 type DataSet struct {
 	Error   error
 	Fetched time.Time
-	*Latest
-	*Price
+	*BlockchainStats
+	*PriceInfo
 }
 
-type Latest struct {
+type BlockchainStats struct {
 	Hash   string
 	Height int
 	Time   time.Time
 }
 
-type Price struct {
+type PriceInfo struct {
 	Bitcoin map[string]float64
 }
 
@@ -115,7 +115,7 @@ func fetchData() (out DataSet) {
 			errs <- err
 			return
 		}
-		out.Latest = h
+		out.BlockchainStats = h
 	}()
 	go func() {
 		defer wg.Done()
@@ -124,7 +124,7 @@ func fetchData() (out DataSet) {
 			errs <- err
 			return
 		}
-		out.Price = p
+		out.PriceInfo = p
 	}()
 	wg.Wait()
 	select {
@@ -156,12 +156,12 @@ func formatInteger(v int) string {
 	return p.Sprintf("%d", v)
 }
 
-func getLatest() (*Latest, error) {
-	return getJSONResource[Latest]("https://api.blockcypher.com/v1/btc/main")
+func getLatest() (*BlockchainStats, error) {
+	return getJSONResource[BlockchainStats]("https://api.blockcypher.com/v1/btc/main")
 }
 
-func getPrice() (*Price, error) {
-	return getJSONResource[Price]("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
+func getPrice() (*PriceInfo, error) {
+	return getJSONResource[PriceInfo]("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
 }
 
 func getJSONResource[T any](url string) (*T, error) {
