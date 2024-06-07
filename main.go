@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/caseymrm/menuet"
@@ -53,21 +54,34 @@ func bitcoinStatus() {
 		case <-time.After(time.Second / 3):
 		}
 		if last == nil {
-			log.Printf("no data\n")
 			continue
 		}
-		if last.Error != nil {
-			log.Printf("error: %v\n", last.Error)
-			setMenuTitle(last.Error.Error())
-		} else {
-			t := last.Latest.Time
+		switch {
+		case last.Price != nil && last.Latest != nil:
 			setMenuTitle(fmt.Sprintf(
 				"%s @ %s (%.0fm/%.0fs)",
 				formatDollars(last.Price.Bitcoin["usd"]),
 				formatInteger(last.Latest.Height),
-				time.Since(t).Minutes(),
+				time.Since(last.Latest.Time).Minutes(),
 				time.Since(last.Fetched).Seconds(),
 			))
+		case last.Price != nil:
+			setMenuTitle(fmt.Sprintf(
+				"%s (%.0fs)",
+				formatDollars(last.Price.Bitcoin["usd"]),
+				time.Since(last.Fetched).Seconds(),
+			))
+		case last.Latest != nil:
+			setMenuTitle(fmt.Sprintf(
+				"@ %s (%.0fm/%.0fs)",
+				formatInteger(last.Latest.Height),
+				time.Since(last.Latest.Time).Minutes(),
+				time.Since(last.Fetched).Seconds(),
+			))
+		}
+		if last.Error != nil {
+			log.Printf("error: %v\n", last.Error)
+			last.Error = nil
 		}
 	}
 }
@@ -91,17 +105,33 @@ type Price struct {
 
 func fetchData() (out DataSet) {
 	out.Fetched = time.Now()
-	h, err := getLatest()
-	if err != nil {
-		out.Error = err
-		return
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		h, err := getLatest()
+		if err != nil {
+			errs <- err
+			return
+		}
+		out.Latest = h
+	}()
+	go func() {
+		defer wg.Done()
+		p, err := getPrice()
+		if err != nil {
+			errs <- err
+			return
+		}
+		out.Price = p
+	}()
+	wg.Wait()
+	select {
+	case e := <-errs:
+		out.Error = e
+	default:
 	}
-	out.Latest = h
-	p, err := getPrice()
-	if err != nil {
-		out.Error = err
-	}
-	out.Price = p
 	return
 }
 
