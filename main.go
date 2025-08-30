@@ -6,17 +6,78 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/caseymrm/menuet"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
+
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/btcsuite/btcd/wire"
 )
 
 func main() {
+
+	runws()
+
 	go bitcoinStatus()
+
 	menuet.App().RunApplication()
+}
+
+func runws() {
+
+	ntfnHandlers := rpcclient.NotificationHandlers{
+		OnFilteredBlockConnected: func(height int32, header *wire.BlockHeader, txns []*btcutil.Tx) {
+			log.Printf("Block connected: %v (%d) %v",
+				header.BlockHash(), height, header.Timestamp)
+		},
+		OnFilteredBlockDisconnected: func(height int32, header *wire.BlockHeader) {
+			log.Printf("Block disconnected: %v (%d) %v",
+				header.BlockHash(), height, header.Timestamp)
+		},
+	}
+
+	connCfg := &rpcclient.ConnConfig{
+		Host:     "localhost:8334",
+		Endpoint: "ws",
+		User:     os.Getenv("user"),
+		Pass:     os.Getenv("pass"),
+	}
+	client, err := rpcclient.New(connCfg, &ntfnHandlers)
+	if err != nil {
+		log.Fatalf("can't connect: %v", err)
+	}
+
+	// Register for block connect and disconnect notifications.
+	if err := client.NotifyBlocks(); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("NotifyBlocks: Registration Complete")
+
+	// Get the current block count.
+	blockCount, err := client.GetBlockCount()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Block count: %d", blockCount)
+
+	// For this example gracefully shutdown the client after 10 seconds.
+	// Ordinarily when to shutdown the client is highly application
+	// specific.
+	log.Println("Client shutdown in 10 seconds...")
+	time.AfterFunc(time.Second*10, func() {
+		log.Println("Client shutting down...")
+		client.Shutdown()
+		log.Println("Client shutdown complete.")
+	})
+
+	// Wait until the client either shuts down gracefully (or the user
+	// terminates the process with Ctrl+C).
+	client.WaitForShutdown()
 }
 
 func bitcoinStatus() {
@@ -110,7 +171,7 @@ func fetchData() (out DataSet) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		h, err := getLatest()
+		h, err := getStats()
 		if err != nil {
 			errs <- err
 			return
@@ -156,7 +217,7 @@ func formatInteger(v int) string {
 	return p.Sprintf("%d", v)
 }
 
-func getLatest() (*BlockchainStats, error) {
+func getStats() (*BlockchainStats, error) {
 	return getJSONResource[BlockchainStats]("https://api.blockcypher.com/v1/btc/main")
 }
 
